@@ -28,17 +28,19 @@ class HSwish(nn.Module):
         return x * self.sigmoid(x)
 
 
-class SSE(nn.Module):
-    def __init__(self, planes, groups=1):
-        super(SSE, self).__init__()
-        self.context = nn.AdaptiveAvgPool2d(1)
+class SE(nn.Module):
+    def __init__(self, planes, ratio=16):
+        super(SE, self).__init__()
+        mip = max(8, planes // ratio)
         self.fusion = nn.Sequential(
-            nn.Conv2d(in_channels=planes, out_channels=planes, kernel_size=1, groups=groups),
-            # nn.BatchNorm2d(planes),
+            nn.Conv2d(in_channels=planes, out_channels=mip, kernel_size=1),
+            # nn.BatchNorm2d(mip),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels=mip, out_channels=planes, kernel_size=1),
         )
-        
+
     def forward(self, x):
-        out = self.context(x)
+        out = x.mean(dim=2, keepdim=True).mean(dim=3, keepdim=True)
         out = self.fusion(out)
         return x * out.sigmoid()
 
@@ -74,23 +76,6 @@ class CBAM(nn.Module):
         return x * out1 * out2
 
 
-class SE(nn.Module):
-    def __init__(self, planes, ratio=16):
-        super(SE, self).__init__()
-        mip = max(8, planes // ratio)
-        self.fusion = nn.Sequential(
-            nn.Conv2d(in_channels=planes, out_channels=mip, kernel_size=1),
-            # nn.BatchNorm2d(mip),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(in_channels=mip, out_channels=planes, kernel_size=1),
-        )
-        
-    def forward(self, x):
-        out = x.mean(dim=2, keepdim=True).mean(dim=3, keepdim=True)
-        out = self.fusion(out)
-        return x * out.sigmoid()
-
-
 class CA(nn.Module):
     def __init__(self, planes, ratio=16):
         super(CA, self).__init__()
@@ -123,91 +108,9 @@ class CA(nn.Module):
         return x * self.sig_x(out_x) * self.sig_y(out_y)
 
 
-class XCA(nn.Module):
-    def __init__(self, planes, ratio=16):
-        super(XCA, self).__init__()
-        mip = max(8, planes // ratio)
-        self.fusion = nn.Sequential(
-            nn.Conv2d(in_channels=planes, out_channels=mip, kernel_size=1),
-            nn.BatchNorm2d(mip),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(in_channels=mip, out_channels=planes, kernel_size=1),
-        )
-        
-    def forward(self, x):
-        out = torch.unsqueeze(torch.mean(x, dim=3), dim=3)
-        out = self.fusion(out)
-
-        return x * out.sigmoid()
-
-
-class YCA(nn.Module):
-    def __init__(self, planes, ratio=16):
-        super(YCA, self).__init__()
-        mip = max(8, planes // ratio)
-        self.fusion = nn.Sequential(
-            nn.Conv2d(in_channels=planes, out_channels=mip, kernel_size=1),
-            nn.BatchNorm2d(mip),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(in_channels=mip, out_channels=planes, kernel_size=1),
-        )
-        
-    def forward(self, x):
-        out = torch.unsqueeze(torch.mean(x, dim=2), dim=3)
-        out = self.fusion(out)
-        out = torch.transpose(out, dim0=2, dim1=3)
-
-        return x * out.sigmoid()
-
-
-class ECA(nn.Module):
-    def __init__(self, channel, k_size=3):
-        super(ECA, self).__init__()
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.fusion = nn.Conv1d(1, 1, kernel_size=k_size, padding=k_size//2)
-        
-        def forward(self, x):
-            # x: input features with shape [b, c, h, w]
-            b, c, h, w = x.size()
-            
-            # feature descriptor on the global spatial information
-            out = self.avg_pool(x)
-            
-            # Two different branches of ECA module
-            out = self.fusion(out.squeeze(-1).transpose(-1, -2))
-            out = out.transpose(-1, -2).unsqueeze(-1)
-            
-            return x * out.sigmoid()
-
-
-class CSA(nn.Module):
-    def __init__(self, planes, k_size=3):
-        super(CSA, self).__init__()
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.conv1 = nn.Conv1d(1, 1, kernel_size=k_size, padding=k_size//2)
-        self.bn = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv1d(1, 1, kernel_size=k_size, padding=k_size//2)
-
-    def forward(self, x):
-        # x: input features with shape [b, c, h, w]
-        b, c, h, w = x.size()
-
-        # feature descriptor on the global spatial information
-        out = self.avg_pool(x)
-
-        # Two different branches of ECA module
-        out = self.conv1(out.squeeze(-1).transpose(-1, -2))
-        out = out.transpose(-1, -2).unsqueeze(-1)
-        out = self.bn(out)
-        out = self.conv2(out.squeeze(-1).transpose(-1, -2))
-        out = out.transpose(-1, -2).unsqueeze(-1)
-
-        return x * out.sigmoid()
-
-
-class DA(nn.Module):
+class DAA(nn.Module):
     def __init__(self, planes, k_size=7, ratio=4, use_c=True, use_x=True, use_y=True):
-        super(DA, self).__init__()
+        super(DAA, self).__init__()
         mip = max(8, planes // ratio)
         self.use_c = (use_c == 1)
         self.use_x = (use_x == 1)
@@ -259,23 +162,6 @@ class DA(nn.Module):
         return output
 
 
-class BA(nn.Module):
-    def __init__(self, planes, ratio=32):
-        super(BA, self).__init__()
-        mip = max(1, planes // ratio)
-        self.context = nn.Sequential(
-            nn.Conv2d(in_channels=planes, out_channels=mip, kernel_size=1),
-            nn.BatchNorm2d(mip),
-            nn.Conv2d(in_channels=mip, out_channels=mip, kernel_size=3, padding=1),
-            nn.BatchNorm2d(mip),
-            nn.Conv2d(in_channels=mip, out_channels=planes, kernel_size=3, padding=1),
-        )
-        
-    def forward(self, x):
-        out = self.context(x)
-        return x * out.sigmoid()
-
-
 def _make_divisible(v, divisor, min_value=None):
     """
     This function is taken from the original tf repo.
@@ -319,26 +205,14 @@ class InvertedResidual(nn.Module):
         self.use_res_connect = self.stride == 1 and inp == oup
 
         if isinstance(att, str):
-            if "cbam" in att:
-                att_block = CBAM(hidden_dim, int(att.split("_")[1]))
-            elif "sse" in att:
-                att_block = SSE(hidden_dim, int(att.split("_")[1]))
-            elif "ba" in att:
-                att_block = BA(hidden_dim, int(att.split("_")[1]))
-            elif "se" in att:
+            if "se" in att:
                 att_block = SE(hidden_dim, int(att.split("_")[1]))
-            elif "eca" in att:
-                att_block = ECA(hidden_dim, int(att.split("_")[1]))
-            elif "xca" in att:
-                att_block = XCA(hidden_dim, int(att.split("_")[1]))
-            elif "yca" in att:
-                att_block = YCA(hidden_dim, int(att.split("_")[1]))
+            elif "cbam" in att:
+                att_block = CBAM(hidden_dim, int(att.split("_")[1]))
             elif "ca" in att:
                 att_block = CA(hidden_dim, int(att.split("_")[1]))
-            elif "csa" in att:
-                att_block = CSA(hidden_dim, int(att.split("_")[1]))
-            elif "da" in att:
-                att_block = DA(hidden_dim, int(att.split("_")[1]), int(att.split("_")[2]), int(att.split("_")[3]), int(att.split("_")[4]), int(att.split("_")[5]))
+            elif "daa" in att:
+                att_block = DAA(hidden_dim, int(att.split("_")[1]), int(att.split("_")[2]), int(att.split("_")[3]), int(att.split("_")[4]), int(att.split("_")[5]))
         else:
             att_block = nn.Sequential()
 

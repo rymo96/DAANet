@@ -29,7 +29,6 @@ def _make_divisible(v, divisor, min_value=None):
     return new_v
 
 
-
 class HSigmoid(nn.Module):
     def __init__(self, inplace=True):
         super(HSigmoid, self).__init__()
@@ -48,6 +47,23 @@ class HSwish(nn.Module):
         return x * self.sigmoid(x)
 
 
+class SE(nn.Module):
+    def __init__(self, planes, ratio=16):
+        super(SE, self).__init__()
+        mip = max(8, planes // ratio)
+        self.fusion = nn.Sequential(
+            nn.Conv2d(in_channels=planes, out_channels=mip, kernel_size=1),
+            # nn.BatchNorm2d(mip),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels=mip, out_channels=planes, kernel_size=1),
+        )
+
+    def forward(self, x):
+        out = x.mean(dim=2, keepdim=True).mean(dim=3, keepdim=True)
+        out = self.fusion(out)
+        return x * out.sigmoid()
+
+
 class CBAM(nn.Module):
     def __init__(self, planes, ratio=32, kernel_size=7):
         super(CBAM, self).__init__()
@@ -63,10 +79,10 @@ class CBAM(nn.Module):
 
         # spatial att
         self.fusion2 = nn.Sequential(
-            nn.Conv2d(2, 1, kernel_size, padding=kernel_size//2),
+            nn.Conv2d(2, 1, kernel_size, padding=kernel_size // 2),
             nn.BatchNorm2d(1),
         )
-        
+
     def forward(self, x):
         out1 = x.mean(dim=2, keepdim=True).mean(dim=3, keepdim=True) + self.max_pool(x)
         out1 = self.fusion1(out1)
@@ -77,23 +93,6 @@ class CBAM(nn.Module):
         out2 = out2.sigmoid()
 
         return x * out1 * out2
-
-
-class SE(nn.Module):
-    def __init__(self, planes, ratio=16):
-        super(SE, self).__init__()
-        mip = max(8, planes // ratio)
-        self.fusion = nn.Sequential(
-            nn.Conv2d(in_channels=planes, out_channels=mip, kernel_size=1),
-            # nn.BatchNorm2d(mip),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(in_channels=mip, out_channels=planes, kernel_size=1),
-        )
-        
-    def forward(self, x):
-        out = x.mean(dim=2, keepdim=True).mean(dim=3, keepdim=True)
-        out = self.fusion(out)
-        return x * out.sigmoid()
 
 
 class CA(nn.Module):
@@ -114,9 +113,9 @@ class CA(nn.Module):
             nn.Conv2d(in_channels=mip, out_channels=planes, kernel_size=1),
             nn.Sigmoid()
         )
-        
+
     def forward(self, x):
-        n,c,h,w = x.size()
+        n, c, h, w = x.size()
         out_x = torch.unsqueeze(torch.mean(x, dim=3), dim=3)
         out_y = torch.unsqueeze(torch.mean(x, dim=2), dim=3)
 
@@ -128,9 +127,9 @@ class CA(nn.Module):
         return x * self.sig_x(out_x) * self.sig_y(out_y)
 
 
-class DA(nn.Module):
+class DAA(nn.Module):
     def __init__(self, planes, k_size=7, ratio=4, use_c=True, use_x=True, use_y=True):
-        super(DA, self).__init__()
+        super(DAA, self).__init__()
         mip = max(8, planes // ratio)
         self.use_c = (use_c == 1)
         self.use_x = (use_x == 1)
@@ -138,19 +137,19 @@ class DA(nn.Module):
 
         if self.use_x:
             self.fusion_x = nn.Sequential(
-                nn.Conv2d(1, 1, kernel_size=(k_size, 1), padding=(k_size//2, 0), bias=False),
+                nn.Conv2d(1, 1, kernel_size=(k_size, 1), padding=(k_size // 2, 0), bias=False),
                 nn.BatchNorm2d(1),
                 nn.ReLU(inplace=True),
-                nn.Conv2d(1, 1, kernel_size=(k_size, 1), padding=(k_size//2, 0)),
+                nn.Conv2d(1, 1, kernel_size=(k_size, 1), padding=(k_size // 2, 0)),
                 nn.Sigmoid()
             )
 
         if self.use_y:
             self.fusion_y = nn.Sequential(
-                nn.Conv2d(1, 1, kernel_size=(1, k_size), padding=(0, k_size//2), bias=False),
+                nn.Conv2d(1, 1, kernel_size=(1, k_size), padding=(0, k_size // 2), bias=False),
                 nn.BatchNorm2d(1),
                 nn.ReLU(inplace=True),
-                nn.Conv2d(1, 1, kernel_size=(1, k_size), padding=(0, k_size//2)),
+                nn.Conv2d(1, 1, kernel_size=(1, k_size), padding=(0, k_size // 2)),
                 nn.Sigmoid()
             )
 
@@ -182,23 +181,7 @@ class DA(nn.Module):
         return output
 
 
-class BA(nn.Module):
-    def __init__(self, planes, ratio=32):
-        super(BA, self).__init__()
-        mip = max(1, planes // ratio)
-        self.context = nn.Sequential(
-            nn.Conv2d(in_channels=planes, out_channels=mip, kernel_size=1),
-            nn.BatchNorm2d(mip),
-            nn.Conv2d(in_channels=mip, out_channels=mip, kernel_size=3, padding=1),
-            nn.BatchNorm2d(mip),
-            nn.Conv2d(in_channels=mip, out_channels=planes, kernel_size=3, padding=1),
-        )
-        
-    def forward(self, x):
-        out = self.context(x)
-        return x * out.sigmoid()
 
-    
 class ConvBnAct(nn.Module):
     def __init__(self, in_chs, out_chs, kernel_size, stride=1, act_layer=nn.ReLU):
         super(ConvBnAct, self).__init__()
@@ -257,16 +240,14 @@ class GhostBottleneck(nn.Module):
 
         # Squeeze-and-excitation
         if has_se and att is not None:
-            if "cbam" in att:
-                self.se = CBAM(mid_chs, int(att.split("_")[1]))
-            elif "ba" in att:
-                self.se = BA(mid_chs, int(att.split("_")[1]))
-            elif "se" in att:
+            if "se" in att:
                 self.se = SE(mid_chs, int(att.split("_")[1]))
+            elif "cbam" in att:
+                self.se = CBAM(mid_chs, int(att.split("_")[1]))
             elif "ca" in att:
                 self.se = CA(mid_chs, int(att.split("_")[1]))
-            elif "da" in att:
-                self.se = DA(mid_chs, int(att.split("_")[1]), int(att.split("_")[2]), int(att.split("_")[3]), int(att.split("_")[4]), int(att.split("_")[5]))
+            elif "daa" in att:
+                self.se = DAA(mid_chs, int(att.split("_")[1]), int(att.split("_")[2]), int(att.split("_")[3]), int(att.split("_")[4]), int(att.split("_")[5]))
         else:
             self.se = None
 
