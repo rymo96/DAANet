@@ -10,7 +10,7 @@ Python 3.8.5, torch 1.7.1, torchvison 0.8.2
 
 Prepare
 ----
-The [ImageNet ILSVRC2012 dataset](https://image-net.org/challenges/LSVRC/2012/index.php#) is required.
+The [ImageNet ILSVRC2012 dataset](https://image-net.org/challenges/LSVRC/2012/index.php#) is required. Download the ImageNet dataset from http://www.image-net.org/
 
 Optional Models and Attention blocks
 ----
