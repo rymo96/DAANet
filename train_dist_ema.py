@@ -235,27 +235,27 @@ def main():
     # model = MobileNetV2(att="se_8")
     # model = MobileNetV2(att="cbam_24")
     # model = MobileNetV2(att="ca_32")
-    model = MobileNetV2(att="da_7_8_1_1_1")
+    model = MobileNetV2(att="daa_7_8_1_1_1")
 
     # model = MobileNeXt(att="se_8")
     # model = MobileNeXt(att="cbam_24")
     # model = MobileNeXt(att="ca_32")
-    # model = MobileNeXt(att="da_7_8_1_1_1")
+    # model = MobileNeXt(att="daa_7_8_1_1_1")
 
     # model = ShuffleNetV2(att="se_8")
     # model = ShuffleNetV2(att="cbam_24")
     # model = ShuffleNetV2(att="ca_32")
-    # model = ShuffleNetV2(att="da_7_8_1_1_1")
+    # model = ShuffleNetV2(att="daa_7_8_1_1_1")
 
     # model = mobilenet_v3_small(att="se_4")
     # model = mobilenet_v3_small(att="cbam_24")
     # model = mobilenet_v3_small(att="ca_32")
-    # model = mobilenet_v3_small(att="da_7_4_1_1_1")
+    # model = mobilenet_v3_small(att="daa_7_4_1_1_1")
 
     # model = ghostnet(width=1.0, att="se_4")
     # model = ghostnet(width=1.0, att="cbam_24")
     # model = ghostnet(width=1.0, att="ca_32")
-    # model = ghostnet(width=1.0, att="da_7_4_1_1_1")
+    # model = ghostnet(width=1.0, att="daa_7_4_1_1_1")
 
     model = model.to(device)
     if args.ema:
