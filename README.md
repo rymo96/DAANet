@@ -10,7 +10,7 @@ Python 3.8.5, torch 1.7.1, torchvison 0.8.2
 
 Prepare
 ----
-The ImageNet dataset is required.  
+The public ImageNet-1K dataset is required.
 
 Optional Models and Attention blocks
 ----
@@ -23,7 +23,7 @@ The optional attention blocks are SE, CBAM, Coordinate Attention (accepted by CV
 | se_8  | SE, r=8 |
 | cbam_24 | CBAM, r=24 |
 | ca_32 | CA, r=32 |
-| da\_7\_8\_1\_1\_1 | DAA, kernel\_size=7, r=8, use\_c=True, use\_x=True, use\_y=True |
+| daa\_7\_8\_1\_1\_1 | DAA, kernel\_size=7, r=8, use\_c=True, use\_x=True, use\_y=True |
 	
 Command
 ----
